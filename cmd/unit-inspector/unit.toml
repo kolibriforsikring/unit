@@ -1,0 +1,48 @@
+# Base configuration for the application.
+# This file describes *what* is being deployed and is shared
+# across all environments.
+
+# Logical name of the service.
+# Used for systemd unit names, directories, and logs.
+name = "unit-inspector"
+
+# Path to the statically compiled binary, relative to the repo root.
+# unit will ship this binary as-is.
+executable = "bin/unit-inspector"
+
+# Port the service listens on.
+# unit uses this to configure systemd socket activation.
+port = 8080
+
+[server]
+# Bypass strict known_hosts checking by default across all environments
+strict_host_key_checking = false
+
+[sandbox]
+# By default, outbound network connections are blocked.
+# Uncomment this if your app needs to talk to a database or external API.
+allow_outbound_network = false
+
+# Creates /var/lib/unit-inspector and gives the DynamicUser ownership of it.
+# Accessible at runtime via $STATE_DIRECTORY.
+state_directory = true
+
+# Creates /var/log/unit-inspector and gives the DynamicUser ownership of it.
+# Accessible at runtime via $LOGS_DIRECTORY.
+logs_directory = true
+
+[resources]
+# Tight limits for demo purposes — low enough to make /stress/memory interesting.
+memory_max = "64M"
+memory_high = "48M"
+cpu_quota = "50%"
+tasks_max = 64
+
+# Scheduled jobs — each entry generates a <name>-<command>.service + .timer unit.
+# The same binary is invoked with the subcommand as the first argument.
+# Shared state with the long-running service is available via $STATE_DIRECTORY.
+# The result is visible at GET /report on the running service.
+[[jobs]]
+command = "report"
+on_calendar = "hourly"
+persistent = true

@@ -1,0 +1,28 @@
+# unit.example.toml
+# Copy this to unit.<env>.toml (e.g. unit.prod.toml) and fill in your values.
+# This file describes *where* your app runs and is safe to commit — secrets
+# never go here, they come from the secrets script.
+#
+# The base unit.toml describes *what* your app is.
+# Deploy with: unit deploy -e prod
+
+[server]
+host = "yourserver"       # SSH hostname or alias from ~/.ssh/config
+user = "deploy"           # SSH user — needs sudo for systemd and /etc/systemd/system
+# ssh_port = 22
+# timeout = 30
+# strict_host_key_checking = true
+
+# Public domain. If set, unit writes a Caddy config snippet and reloads Caddy.
+# Caddy handles TLS automatically.
+# domain = "yourapp.example.com"
+
+# Path to a local script that exports secrets as environment variables.
+# unit runs this at deploy time and uploads the values to the server.
+# secrets = "./get-secrets.sh"
+
+# Static environment variables for this environment.
+# For secrets (API keys, passwords), use the secrets script above instead.
+# [env]
+# APP_ENV = "production"
+# LOG_LEVEL = "info"
