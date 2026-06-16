@@ -10,6 +10,8 @@ package deploy
 const ServiceTemplate = `[Unit]
 Description=Unit Service: {{.Name}}
 Requires={{.Name}}.socket
+StartLimitBurst=1
+StartLimitIntervalSec=60s
 {{- range .DependsOn.After}}
 After={{.}}{{end}}
 {{- range .DependsOn.Requires}}
@@ -22,8 +24,6 @@ Type=notify
 WatchdogSec=10s
 TimeoutStartSec=30s
 Restart=always
-StartLimitBurst=1
-StartLimitIntervalSec=60s
 DynamicUser=yes
 ProtectHome=yes
 CapabilityBoundingSet=
