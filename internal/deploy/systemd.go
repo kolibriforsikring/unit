@@ -143,6 +143,33 @@ func renderAndUpload(client *ssh.Client, filename, templ string, data any) error
 	return session.Run(fmt.Sprintf("sudo tee %s > /dev/null", remotePath))
 }
 
+// fetchJournalLogs retrieves the last n log lines for the given service.
+func fetchJournalLogs(client *ssh.Client, serviceName string, lines int) string {
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Sprintf("(could not open journal session: %v)", err)
+	}
+	defer session.Close()
+
+	output, _ := session.CombinedOutput(fmt.Sprintf(
+		"journalctl -u %s.service -n %d --no-pager --output=short-precise 2>&1 || true",
+		serviceName, lines,
+	))
+	return strings.TrimSpace(string(output))
+}
+
+// printFailureContext prints captured command output and journal logs in a clearly
+// delimited block so failure context is immediately visible.
+func printFailureContext(cmdOutput []byte, journalLogs string) {
+	sep := strings.Repeat("─", 60)
+	if len(bytes.TrimSpace(cmdOutput)) > 0 {
+		fmt.Printf("\n%s\n  Command output:\n%s\n%s\n", sep, strings.TrimSpace(string(cmdOutput)), sep)
+	}
+	if journalLogs != "" {
+		fmt.Printf("\n%s\n  Recent service logs (journalctl):\n%s\n%s\n\n", sep, journalLogs, sep)
+	}
+}
+
 // 3. The final shell execution
 func triggerSystemd(client *ssh.Client, cfg *config.Config, version string) error {
 	// 1. Capture the 'previous' version before we touch anything
@@ -169,7 +196,8 @@ func triggerSystemd(client *ssh.Client, cfg *config.Config, version string) erro
 
 	newReleasePath := fmt.Sprintf("%s/%s/releases/%s", cfg.DeployPath, cfg.Name, version)
 
-	// This function will be called if activation fails
+	// This function will be called if activation fails. Journal logs must be
+	// fetched by the caller BEFORE rollback so they reflect the failed version.
 	rollback := func() error {
 		if previousRelease == "" {
 			return fmt.Errorf("new version failed to start, but no previous version was found to roll back to")
@@ -210,8 +238,10 @@ sudo systemctl restart %s.socket %s.service
 `, newReleasePath, currentLinkPath, cfg.Name, cfg.Name, cfg.Name)
 
 	fmt.Printf("🚀 Activating new version: %s\n", version)
-	if err := activateSession.Run(activateCmd); err != nil {
+	activateOutput, err := activateSession.CombinedOutput(activateCmd)
+	if err != nil {
 		fmt.Printf("❌ Activation command failed: %v\n", err)
+		printFailureContext(activateOutput, fetchJournalLogs(client, cfg.Name, 30))
 		return rollback()
 	}
 
@@ -227,6 +257,7 @@ sudo systemctl restart %s.socket %s.service
 	checkCmd := fmt.Sprintf("systemctl is-active --quiet %s.service", cfg.Name)
 	if err := checkSession.Run(checkCmd); err != nil {
 		fmt.Printf("❌ Health check failed for new version: %v\n", err)
+		printFailureContext(nil, fetchJournalLogs(client, cfg.Name, 30))
 		return rollback()
 	}
 
